@@ -19,6 +19,8 @@ package nl.openweb.hippo.groovy;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.jcr.NamespaceException;
 
@@ -44,6 +46,9 @@ public class ScriptClassFactory {
     private static final NamespaceMapping namespaceResolver = new NamespaceMapping();
     private static final NameFactory nameFactory = NameFactoryImpl.getInstance();
     private static GroovyClassLoader groovyClassLoader = new GroovyClassLoader();
+    private static final String ANNOTATIONS_REGEX = getAnnotationClasses().stream()
+                .map(annotation -> annotation.getCanonicalName().replace(".", "\\.") + "|" + annotation.getSimpleName())
+            .collect(joining("|"));
 
     private ScriptClassFactory() {
         //No instantiating of this class
@@ -96,12 +101,14 @@ public class ScriptClassFactory {
                     .map(clazz -> "import " + clazz.getCanonicalName() + ";")
                     .collect(joining());
 
-            String interpretCode = imports + script.replaceAll("import .+\n", "")
+            String annotations = getAnnotations(script);
+            script = stripAnnotations(script, keepLineCount);
+
+            String interpretCode = imports + annotations + script.replaceAll("import .+\n", "")
                     .replaceAll("package\\s.*\n", "")
                     .replaceAll("extends\\s.*\\{[^\\u001a]*", "{}");
 
             interpretCode = scrubAnnotations(interpretCode);
-            script = stripAnnotations(script, keepLineCount);
             final ScriptClass scriptClass = new ScriptClass(file, groovyClassLoader.parseClass(interpretCode), script);
             validateScriptClass(scriptClass);
             return scriptClass;
@@ -120,10 +127,25 @@ public class ScriptClassFactory {
     }
 
     private static String scrubAnnotations(final String interpretCode) {
-        String possibleAnnotationNames = getAnnotationClasses().stream()
-                .map(annotation -> annotation.getCanonicalName().replace(".", "\\.") + "|" + annotation.getSimpleName())
-                .collect(joining("|"));
-        return interpretCode.replaceAll("@((?!" + possibleAnnotationNames + ")[\\w]+)([\\s]+|(\\([^\\)]*\\)))", "");
+        return interpretCode.replaceAll("@((?!" + ANNOTATIONS_REGEX + ")[\\w]+)([\\s]+|(\\([^\\)]*\\)))", "");
+    }
+
+    private static String getAnnotations(final String sourceCode){
+        String result = "\n";
+        final List<Class<?>> annotationClasses = getAnnotationClasses();
+        for (Class<?> annotationClass : annotationClasses) {
+            final String regex1 = Generator.getAnnotationRegex(annotationClass.getSimpleName());
+            final String regex2 = Generator.getAnnotationRegex(annotationClass.getCanonicalName());
+            final Matcher matcher1 = Pattern.compile(regex1).matcher(sourceCode);
+            final Matcher matcher2 = Pattern.compile(regex2).matcher(sourceCode);
+            if(matcher1.find()){
+                result += matcher1.group();
+            }
+            if(matcher2.find()){
+                result += matcher2.group();
+            }
+        }
+        return result;
     }
 
     public static List<ScriptClass> getScriptClasses(File sourceDir) {

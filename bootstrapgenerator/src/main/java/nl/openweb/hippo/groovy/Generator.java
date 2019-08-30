@@ -34,7 +34,6 @@ import org.apache.commons.lang3.StringUtils;
 import nl.openweb.hippo.groovy.annotations.Bootstrap;
 import nl.openweb.hippo.groovy.annotations.Exclude;
 import nl.openweb.hippo.groovy.annotations.Updater;
-import nl.openweb.hippo.groovy.model.ScriptClass;
 import static nl.openweb.hippo.groovy.model.Constants.Files.GROOVY_EXTENSION;
 
 public abstract class Generator {
@@ -113,7 +112,7 @@ public abstract class Generator {
         return matcher.find() ? matcher.group() : StringUtils.EMPTY;
     }
 
-    private static String getAnnotationRegex(final String className) {
+    static String getAnnotationRegex(final String className) {
         final String annotationName = "@" + className;
         return annotationName + ANNOTATION_PAYLOAD;
     }
